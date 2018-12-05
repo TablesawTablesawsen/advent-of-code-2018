@@ -15,5 +15,8 @@ with open('input/day3.txt') as claims:
                 fabric[coord] = fabric.get(coord, []) + [matches['id']]
 
 
-overlap_ids = {id for ids in fabric.values() if len(ids) > 1 for id in ids }
+overlap_ids = { id 
+    for ids in fabric.values() if len(ids) > 1 
+        for id in ids 
+    }
 print(claim_ids - overlap_ids)
