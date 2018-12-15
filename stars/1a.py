@@ -1,7 +1,4 @@
-freq = 0
-
-with open('input.txt') as input:
-    for num in input:
-        freq = freq + int(num)
+with open('input/day1.txt') as input:
+    freq = sum(int(num) for num in input)
 
 print(freq)
