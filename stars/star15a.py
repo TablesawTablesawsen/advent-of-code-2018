@@ -1,7 +1,6 @@
 import enum
 import collections
 from heapq import heappop, heappush
-from operator import attrgetter
 
 Point = collections.namedtuple('Point', ['y', 'x'])
 
@@ -64,9 +63,9 @@ class Creature(object):
 
     def attack(self, cavern):
         enemy_to_hit = next(iter(sorted(
-            (c for c in sorted(iter(cavern.creatures))
+            (c for c in cavern.creatures
                 if c.side == self.enemy and self.in_range(c)),
-            key=attrgetter('HP')
+            key=lambda c: (c.HP, c.location)
         )), None)
         if enemy_to_hit:
             self.hit(enemy_to_hit)
@@ -167,7 +166,7 @@ class Cavern(object):
     def execute_round(self):
         initiative = sorted(self.creatures)
         for creature in initiative:
-            attacked = creature.take_turn(cavern)
+            attacked = creature.take_turn(self)
             if attacked:
                 if attacked.HP < 1:
                     self.creatures.remove(attacked)
@@ -177,20 +176,25 @@ class Cavern(object):
     def battle(self):
         rnd = 0
         battle_finished = None
-        while rnd < 50:
+        while True:
             rnd += 1
             battle_finished = self.execute_round()
             if battle_finished:
                 break
-            print(rnd, self.creatures)
+            print(rnd)
         return rnd * sum(c.HP for c in self.creatures)
 
+def do_the_thing(filename):
+    cavern = Cavern()
+    with open(filename) as inp:
+        cavern.build(inp)
 
-cavern = Cavern()
-with open('input/day15.txt') as inp:
-    cavern.build(inp)
+    # print(cavern.creatures)
 
-# print(cavern.creatures)
+    print(cavern.battle())
+    print(cavern.creatures)
 
-print(cavern.battle())
-print(cavern.creatures)
+if __name__ == '__main__':
+    do_the_thing('input/day15-test1.txt')
+    do_the_thing('input/day15-test2.txt')
+    do_the_thing('input/day15.txt')
