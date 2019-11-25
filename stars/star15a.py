@@ -1,11 +1,12 @@
 import enum
 import collections
 from heapq import heappop, heappush
+import pprint
 
 Point = collections.namedtuple('Point', ['y', 'x'])
 
 
-def astar_search(start, h_func, moves_func):
+def astar_search(start, h_func, moves_func, max_path=None):
     """Find a shortest sequence of states from start to a goal state
     (a state s with h_func(s) == 0)."""
     # A priority queue, ordered by path length, f = g + h
@@ -20,7 +21,10 @@ def astar_search(start, h_func, moves_func):
             return Path(previous, s)
         for s2 in moves_func(s):
             new_cost = path_cost[s] + 1
-            if s2 not in path_cost or new_cost < path_cost[s2]:
+            if (
+                (s2 not in path_cost or new_cost < path_cost[s2]) and
+                (max_path and new_cost <= max_path)
+            ):
                 heappush(frontier, (new_cost + h_func(s2), s2))
                 path_cost[s2] = new_cost
                 previous[s2] = s
@@ -72,6 +76,8 @@ class Creature(object):
         return enemy_to_hit
 
     def take_turn(self, cavern):
+        if self not in cavern.creatures:
+            return
         enemy_hit = self.attack(cavern)
         if enemy_hit:
             return enemy_hit
@@ -81,28 +87,29 @@ class Creature(object):
             return enemy_hit
 
     def move(self, cavern):
+        targets = cavern.side_adjacent_points(self.enemy)
+        if not targets:
+            return
+
         def heuristic(point):
-            # enemies = {c for c in cavern.creatures if c.side == self.enemy}
-            # print(enemies)
             return min(
-                (
-                    abs(point.x - adj.x) + abs(point.y - adj.y)
-                    # for c in enemies
-                    for c in cavern.creatures if c.side == self.enemy
-                    for adj in cavern.open_adjacent_points(c.location)
-                ),
-                default=0
+                abs(point.x - target.x) + abs(point.y - target.y)
+                for target in targets
             )
-        possible_paths = [
-            astar_search(adj, heuristic, cavern.open_adjacent_points)
-            for adj in cavern.open_adjacent_points(self.location)
-        ]
+
+        def possible_paths():
+            best_path = len(cavern.points)
+            for adj in cavern.open_adjacent_points(self.location):
+                p = astar_search(adj, heuristic, cavern.open_adjacent_points,
+                    max_path=best_path)
+                if isinstance(p, list):
+                    yield p
+                    best_path = len(p)
 
         self.location = next(iter(sorted(
-            (p for p in possible_paths if isinstance(p, list)),
+            (p for p in possible_paths()),
             key=lambda p: (len(p), p[0])
         )), [self.location])[0]
-
 
 class Goblin(Creature):
     side = CreatureType.goblin
@@ -132,7 +139,7 @@ class Elf(Creature):
 
 class Cavern(object):
     def __init__(self, creatures=None, points=None):
-        self.creatures = creatures or set()
+        self.creatures = creatures or []
         self.points = points or set()
 
     def battle_over(self):
@@ -148,20 +155,26 @@ class Cavern(object):
                     self.points.add(Point(y, x))
                 elif char == 'G':
                     self.points.add(Point(y, x))
-                    self.creatures.add(Goblin(y, x))
+                    self.creatures.append(Goblin(y, x))
                 elif char == 'E':
                     self.points.add(Point(y, x))
-                    self.creatures.add(Elf(y, x))
+                    self.creatures.append(Elf(y, x))
 
     def open_adjacent_points(self, point):
         open_points = self.points - {c.location for c in self.creatures}
 
-        return {p for p in [
+        return [p for p in [
             Point(point.y - 1, point.x),
             Point(point.y, point.x - 1),
             Point(point.y, point.x + 1),
             Point(point.y + 1, point.x),
-        ] if p in open_points}
+        ] if p in open_points]
+
+    def side_adjacent_points(self, side):
+        return [adj for
+            c in self.creatures if c.side == side
+            for adj in self.open_adjacent_points(c.location)
+        ]
 
     def execute_round(self):
         initiative = sorted(self.creatures)
@@ -177,22 +190,40 @@ class Cavern(object):
         rnd = 0
         battle_finished = None
         while True:
-            rnd += 1
             battle_finished = self.execute_round()
             if battle_finished:
                 break
+            rnd += 1
             print(rnd)
         return rnd * sum(c.HP for c in self.creatures)
+
+    def char(self, location):
+        if location not in self.points:
+            return '#'
+        creature = next(
+            (c for c in self.creatures if c.location == location),
+            None
+        )
+        if creature:
+            return {
+                CreatureType.elf: 'E',
+                CreatureType.goblin: 'G'
+            }[creature.side]
+        return '.'
+
+    def print_board(self):
+        for y in range(max(p.y for p in self.points)+2):
+            print(''.join(
+                self.char(Point(y, x))
+                for x in range(max(p.x for p in self.points)+2)
+            ))
+
 
 def do_the_thing(filename):
     cavern = Cavern()
     with open(filename) as inp:
         cavern.build(inp)
-
-    # print(cavern.creatures)
-
     print(cavern.battle())
-    print(cavern.creatures)
 
 if __name__ == '__main__':
     do_the_thing('input/day15-test1.txt')
